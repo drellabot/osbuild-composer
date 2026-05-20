@@ -101,6 +101,13 @@ func (t *bootcImageType) BootMode() platform.BootMode {
 		return platform.BOOT_UEFI
 	}
 
+	// Sealed images don't need a BIOSBOOT partition as they don't use bootupd
+	// (which requires it to exist), let's set ourselves to UEFI
+	bd := t.arch.distro.(*BootcDistro)
+	if bd.unifiedKernel {
+		return platform.BOOT_UEFI
+	}
+
 	return platform.BOOT_HYBRID
 }
 
@@ -157,7 +164,7 @@ func (t *bootcImageType) manifestWithoutValidation(bp *blueprint.Blueprint, opti
 
 	switch t.Image {
 	case "bootc_legacy_iso":
-		return t.manifestForLegacyISO(bp, rng)
+		return t.manifestForLegacyISO(bp, options, rng)
 	case "bootc_iso":
 		return t.manifestForISO(bp, options, rng)
 	case "bootc_generic_iso":
@@ -172,20 +179,28 @@ func (t *bootcImageType) manifestWithoutValidation(bp *blueprint.Blueprint, opti
 	}
 }
 
+func (t *bootcImageType) useLocalStorage(options distro.ImageOptions) bool {
+	if options.Bootc != nil {
+		return !options.Bootc.UseRemoteContainerSource
+	}
+	return true
+}
+
 func (t *bootcImageType) manifestForDisk(bp *blueprint.Blueprint, options distro.ImageOptions, rng *rand.Rand) (*manifest.Manifest, []string, error) {
 	bd := t.arch.distro.(*BootcDistro)
 	if bd.imgref == "" {
 		return nil, nil, fmt.Errorf("internal error: no base image defined")
 	}
+	local := t.useLocalStorage(options)
 	containerSource := container.SourceSpec{
 		Source: bd.imgref,
 		Name:   bd.imgref,
-		Local:  true,
+		Local:  local,
 	}
 	buildContainerSource := container.SourceSpec{
 		Source: bd.buildImgref,
 		Name:   bd.buildImgref,
-		Local:  true,
+		Local:  local,
 	}
 
 	var customizations *blueprint.Customizations
@@ -202,6 +217,10 @@ func (t *bootcImageType) manifestForDisk(bp *blueprint.Blueprint, options distro
 	if opts := buildOptions(t); opts != nil {
 		img.BuildOptions = opts
 	}
+
+	img.Bootloader = bd.bootloader
+	img.UnifiedKernel = bd.unifiedKernel
+
 	img.OSCustomizations.Users = users.UsersFromBP(customizations.GetUsers())
 
 	groups, err := customizations.GetGroups()
@@ -349,11 +368,12 @@ func (t *bootcImageType) manifestForISO(bp *blueprint.Blueprint, options distro.
 		return nil, nil, fmt.Errorf("no installer payload bootc ref set")
 	}
 	payloadRef := options.Bootc.InstallerPayloadRef
+	local := t.useLocalStorage(options)
 	imgref := bd.imgref
 	containerSource := container.SourceSpec{
 		Source: imgref,
 		Name:   imgref,
-		Local:  true,
+		Local:  local,
 	}
 	sourceInfo := bd.sourceInfo
 	// XXX: keep it simple for now, we may allow this in the future
@@ -389,7 +409,7 @@ func (t *bootcImageType) manifestForISO(bp *blueprint.Blueprint, options distro.
 	payloadSource := container.SourceSpec{
 		Source: payloadRef,
 		Name:   payloadRef,
-		Local:  true,
+		Local:  local,
 	}
 	img.InstallerPayload = payloadSource
 
@@ -417,10 +437,11 @@ func (t *bootcImageType) manifestForGenericISO(options distro.ImageOptions, rng 
 		return nil, nil, fmt.Errorf("internal error: no base image defined")
 	}
 
+	local := t.useLocalStorage(options)
 	containerSource := container.SourceSpec{
 		Source: bd.imgref,
 		Name:   bd.imgref,
-		Local:  true,
+		Local:  local,
 	}
 
 	platformi := PlatformFor(t.arch.Name(), bd.sourceInfo.UEFIVendor)
@@ -431,7 +452,7 @@ func (t *bootcImageType) manifestForGenericISO(options distro.ImageOptions, rng 
 		img.PayloadContainer = &container.SourceSpec{
 			Source: options.Bootc.InstallerPayloadRef,
 			Name:   options.Bootc.InstallerPayloadRef,
-			Local:  true,
+			Local:  local,
 		}
 	}
 	img.RootfsCompression = "zstd"
@@ -500,16 +521,17 @@ func newDistroYAMLFrom(sourceInfo *osinfo.Info) (*defs.DistroYAML, *distro.ID, e
 	return nil, nil, fmt.Errorf("cannot load distro definitions for %s-%s or any of %v", sourceInfo.OSRelease.ID, sourceInfo.OSRelease.VersionID, sourceInfo.OSRelease.IDLike)
 }
 
-func (t *bootcImageType) manifestForLegacyISO(bp *blueprint.Blueprint, rng *rand.Rand) (*manifest.Manifest, []string, error) {
+func (t *bootcImageType) manifestForLegacyISO(bp *blueprint.Blueprint, options distro.ImageOptions, rng *rand.Rand) (*manifest.Manifest, []string, error) {
 	bd := t.arch.distro.(*BootcDistro)
 	if bd.imgref == "" {
 		return nil, nil, fmt.Errorf("internal error in bootc legacy iso: no base image defined")
 	}
+	local := t.useLocalStorage(options)
 	imgref := bd.imgref
 	containerSource := container.SourceSpec{
 		Source: imgref,
 		Name:   imgref,
-		Local:  true,
+		Local:  local,
 	}
 
 	archStr := t.arch.Name()
@@ -530,7 +552,10 @@ func (t *bootcImageType) manifestForLegacyISO(bp *blueprint.Blueprint, rng *rand
 	if !ok {
 		return nil, nil, fmt.Errorf("cannot find installer package set for %v", installerImgTypeName)
 	}
-	installerConfig := imgType.InstallerConfig(*id, archStr)
+	installerConfig, err := imgType.InstallerConfig(*id, archStr)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error in installer config for %s: %w", installerImgTypeName, err)
+	}
 	if installerConfig == nil {
 		return nil, nil, fmt.Errorf("empty installer config for %s", installerImgTypeName)
 	}
@@ -592,15 +617,16 @@ func (t *bootcImageType) manifestForPXETar(bp *blueprint.Blueprint, options dist
 		return nil, nil, fmt.Errorf("bootc container initramfs requires ostree, dmsquash-live and livenet modules")
 	}
 
+	local := t.useLocalStorage(options)
 	containerSource := container.SourceSpec{
 		Source: bd.imgref,
 		Name:   bd.imgref,
-		Local:  true,
+		Local:  local,
 	}
 	buildContainerSource := container.SourceSpec{
 		Source: bd.buildImgref,
 		Name:   bd.buildImgref,
-		Local:  true,
+		Local:  local,
 	}
 
 	var customizations *blueprint.Customizations
@@ -764,6 +790,15 @@ func (t *bootcImageType) genPartitionTable(customizations *blueprint.Customizati
 
 	bd := t.arch.distro.(*BootcDistro)
 
+	// When there's a unified kernel we don't want to auto-create a /boot even *if* the
+	// root filesystem is btrfs or lvm. Set a policy that disables the creation. Otherwise
+	// the default partition table policy is used.
+	if bd.unifiedKernel {
+		basept.Policy = &disk.PartitionTablePolicy{
+			EnsureXBOOTLDR: false,
+		}
+	}
+
 	// Embedded disk customization applies if there was no local customization
 	if fsCust == nil && diskCust == nil && bd.sourceInfo != nil && bd.sourceInfo.ImageCustomization != nil {
 		imageCustomizations := bd.sourceInfo.ImageCustomization
@@ -833,7 +868,7 @@ func (t *bootcImageType) genPartitionTableDiskCust(basept *disk.PartitionTable, 
 		RequiredMinSizes: requiredMinSizes,
 		Architecture:     t.arch.arch,
 	}
-	return disk.NewCustomPartitionTable(diskCust, partOptions, rng)
+	return disk.NewCustomPartitionTable(diskCust, partOptions, nil, rng)
 }
 
 func (t *bootcImageType) genPartitionTableFsCust(basept *disk.PartitionTable, fsCust []blueprint.FilesystemCustomization, rootfsMinSize uint64, rng *rand.Rand) (*disk.PartitionTable, error) {

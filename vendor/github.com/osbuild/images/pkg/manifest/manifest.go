@@ -19,6 +19,7 @@ import (
 	"github.com/osbuild/images/internal/common"
 	"github.com/osbuild/images/pkg/container"
 	"github.com/osbuild/images/pkg/depsolvednf"
+	"github.com/osbuild/images/pkg/flatpak"
 	"github.com/osbuild/images/pkg/osbuild"
 	"github.com/osbuild/images/pkg/ostree"
 	"github.com/osbuild/images/pkg/rpmmd"
@@ -33,6 +34,7 @@ const (
 	DISTRO_EL8
 	DISTRO_EL7
 	DISTRO_FEDORA
+	DISTRO_ELN
 	_distro_count
 )
 
@@ -43,6 +45,7 @@ var distroNames = map[Distro]string{
 	DISTRO_EL8:    "rhel-8",
 	DISTRO_EL7:    "rhel-7",
 	DISTRO_FEDORA: "fedora",
+	DISTRO_ELN:    "eln",
 }
 
 func (d Distro) String() string {
@@ -182,11 +185,21 @@ func (m Manifest) GetOSTreeSourceSpecs() map[string][]ostree.SourceSpec {
 	return ostreeSpecs
 }
 
+func (m Manifest) GetFlatpakSourceSpecs() map[string][]flatpak.SourceSpec {
+	flatpakSpecs := make(map[string][]flatpak.SourceSpec)
+	for _, pipeline := range m.pipelines {
+		if flatpaks := pipeline.getFlatpakSources(); len(flatpaks) > 0 {
+			flatpakSpecs[pipeline.Name()] = flatpaks
+		}
+	}
+	return flatpakSpecs
+}
+
 type SerializeOptions struct {
 	RpmDownloader osbuild.RpmDownloader
 }
 
-func (m Manifest) Serialize(depsolvedSets map[string]depsolvednf.DepsolveResult, containerSpecs map[string][]container.Spec, ostreeCommits map[string][]ostree.CommitSpec, opts *SerializeOptions) (OSBuildManifest, error) {
+func (m Manifest) Serialize(depsolvedSets map[string]depsolvednf.DepsolveResult, containerSpecs map[string][]container.Spec, ostreeCommits map[string][]ostree.CommitSpec, flatpakSpecs map[string][]flatpak.Spec, opts *SerializeOptions) (OSBuildManifest, error) {
 	if opts == nil {
 		opts = &SerializeOptions{}
 	}
@@ -196,6 +209,7 @@ func (m Manifest) Serialize(depsolvedSets map[string]depsolvednf.DepsolveResult,
 			Depsolved:  depsolvedSets[pipeline.Name()],
 			Containers: containerSpecs[pipeline.Name()],
 			Commits:    ostreeCommits[pipeline.Name()],
+			Flatpaks:   flatpakSpecs[pipeline.Name()],
 		})
 		if err != nil {
 			return nil, err
@@ -214,6 +228,7 @@ func (m Manifest) Serialize(depsolvedSets map[string]depsolvednf.DepsolveResult,
 		mergedInputs.Depsolved.Transactions = append(mergedInputs.Depsolved.Transactions, depsolvedSets[pipeline.Name()].Transactions...)
 		mergedInputs.Depsolved.Repos = append(mergedInputs.Depsolved.Repos, depsolvedSets[pipeline.Name()].Repos...)
 		mergedInputs.Containers = append(mergedInputs.Containers, pipeline.getContainerSpecs()...)
+		mergedInputs.Flatpaks = append(mergedInputs.Flatpaks, pipeline.getFlatpakSpecs()...)
 		mergedInputs.InlineData = append(mergedInputs.InlineData, pipeline.getInline()...)
 		fileRefs, err := pipeline.fileRefs()
 		if err != nil {

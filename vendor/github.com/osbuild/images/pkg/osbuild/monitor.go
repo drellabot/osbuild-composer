@@ -58,6 +58,8 @@ type Status struct {
 type Progress struct {
 	// A human readable message about what is going on
 	Message string
+	// A human readable summary of the current activity (from stage metadata)
+	Summary string
 	// The amount of work already done
 	Done int
 	// The total amount of work for this (sub)progress
@@ -162,8 +164,13 @@ func (sr *StatusScanner) Status() (*Status, error) {
 		stageContext = &context.Pipeline.Stage
 	}
 	var stageName string
+	var stageSummary string
 	if stageContext.Name != "" {
 		stageName = fmt.Sprintf("Stage %s", stageContext.Name)
+		stageSummary = stageContext.Summary
+		if stageSummary == "" {
+			stageSummary = stageContext.Name
+		}
 	}
 	prog := st.Progress
 	for subProg := status.Progress.SubProgress; subProg != nil; subProg = subProg.SubProgress {
@@ -171,6 +178,7 @@ func (sr *StatusScanner) Status() (*Status, error) {
 			Done:    subProg.Done,
 			Total:   subProg.Total,
 			Message: stageName,
+			Summary: stageSummary,
 		}
 		prog = prog.SubProgress
 	}
@@ -288,8 +296,9 @@ type contextJSON struct {
 }
 
 type stageContextJSON struct {
-	Name string `json:"name"`
-	ID   string `json:"id"`
+	Name    string `json:"name"`
+	ID      string `json:"id"`
+	Summary string `json:"summary"`
 }
 
 // progress is the progress information associcated with a given status.

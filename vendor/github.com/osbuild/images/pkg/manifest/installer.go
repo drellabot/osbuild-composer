@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/osbuild/images/internal/common"
+	"github.com/osbuild/images/pkg/flatpak"
 )
 
 type PayloadLocation uint
@@ -52,6 +53,54 @@ func NewPayloadLocation(s string) (PayloadLocation, error) {
 		return PAYLOAD_LOCATION_ROOTFS, nil
 	default:
 		return 0, fmt.Errorf("unknown or unsupported payload location name: %s", s)
+	}
+}
+
+type PayloadKickstart uint
+
+const (
+	// on the iso rootfs is the default, for compatibility
+	PAYLOAD_KICKSTART_ROOT PayloadKickstart = iota
+	PAYLOAD_KICKSTART_INTERACTIVE_DEFAULTS
+)
+
+func (v PayloadKickstart) String() string {
+	switch v {
+	case PAYLOAD_KICKSTART_ROOT:
+		return "root"
+	case PAYLOAD_KICKSTART_INTERACTIVE_DEFAULTS:
+		return "interactive-defaults"
+	default:
+		panic(fmt.Sprintf("unknown or unsupported payload kickstart enum value %d", v))
+	}
+}
+
+func (v *PayloadKickstart) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+
+	new, err := NewPayloadKickstart(s)
+	if err != nil {
+		return err
+	}
+	*v = new
+	return nil
+}
+
+func (v *PayloadKickstart) UnmarshalYAML(unmarshal func(any) error) error {
+	return common.UnmarshalYAMLviaJSON(v, unmarshal)
+}
+
+func NewPayloadKickstart(s string) (PayloadKickstart, error) {
+	switch s {
+	case "root":
+		return PAYLOAD_KICKSTART_ROOT, nil
+	case "interactive-defaults":
+		return PAYLOAD_KICKSTART_INTERACTIVE_DEFAULTS, nil
+	default:
+		return 0, fmt.Errorf("unknown or unsupported payload kickstart name: %s", s)
 	}
 }
 
@@ -103,8 +152,11 @@ type InstallerCustomizations struct {
 		// payloads)
 		ContainerRemoveSignatures bool
 
-		Location PayloadLocation
+		Location  PayloadLocation
+		Kickstart PayloadKickstart
 	}
+
+	Flatpaks []flatpak.SourceSpec
 }
 
 type InstallerLoraxTemplate struct {

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -28,6 +29,8 @@ import (
 	"github.com/osbuild/images/pkg/platform"
 	"github.com/osbuild/images/pkg/rpmmd"
 	"github.com/osbuild/images/pkg/runner"
+
+	"github.com/supakeen/yamlplus"
 )
 
 var (
@@ -94,7 +97,7 @@ type DistroYAML struct {
 
 	imageTypes map[string]ImageTypeYAML
 	// distro wide default image config
-	imageConfig *distro.ImageConfig `yaml:"default"`
+	DistroImageConfig *distroImageConfig `yaml:"image_config,omitempty"`
 
 	// ignore the given image types & override tweaks
 	Conditions map[string]distroConditions `yaml:"conditions"`
@@ -119,7 +122,10 @@ func (d *DistroYAML) ImageTypes() map[string]ImageTypeYAML {
 //
 // Each ImageType gets this as their default ImageConfig.
 func (d *DistroYAML) ImageConfig() *distro.ImageConfig {
-	return d.imageConfig
+	if d.DistroImageConfig != nil {
+		return d.DistroImageConfig.For(d.ID)
+	}
+	return nil
 }
 
 func (d *DistroYAML) SkipImageType(imgTypeName, archName string) bool {
@@ -267,22 +273,107 @@ func LoadDistroWithoutImageTypes(nameVer string) (*DistroYAML, error) {
 }
 
 func (d *DistroYAML) LoadImageTypes() error {
-	f, err := dataFS().Open(filepath.Join(d.DefsPath, "imagetypes.yaml"))
+	var configs []imageTypesYAML
+	var err error
+
+	if yamlplus := experimentalflags.Bool("yamlplus"); yamlplus {
+		configs, err = loadImageTypeConfigsPlus(d)
+	} else {
+		configs, err = loadImageTypeConfigs(d)
+	}
+
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	return mergeImageTypeConfigs(d, configs)
+}
 
-	var toplevel imageTypesYAML
-	decoder := yaml.NewDecoder(f)
-	decoder.KnownFields(true)
-	if err := decoder.Decode(&toplevel); err != nil {
-		return err
+func loadImageTypeConfigs(d *DistroYAML) ([]imageTypesYAML, error) {
+	files, err := fs.Glob(dataFS(), filepath.Join(d.DefsPath, "[^_]*.yaml"))
+	if err != nil {
+		return nil, err
 	}
-	if len(toplevel.ImageTypes) > 0 {
-		d.imageTypes = make(map[string]ImageTypeYAML, len(toplevel.ImageTypes))
-		for name := range toplevel.ImageTypes {
-			v := toplevel.ImageTypes[name]
+
+	sharedPath := filepath.Join(d.DefsPath, "_shared.yaml")
+	sharedContent, _ := fs.ReadFile(dataFS(), sharedPath)
+
+	configs := make([]imageTypesYAML, 0, len(files))
+	for _, fileName := range files {
+		f, err := dataFS().Open(fileName)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
+
+		var reader io.Reader = f
+		if len(sharedContent) > 0 {
+			reader = io.MultiReader(bytes.NewReader(sharedContent), f)
+		}
+
+		var toplevel imageTypesYAML
+
+		decoder := yaml.NewDecoder(reader)
+		decoder.KnownFields(true)
+		decodeErr := decoder.Decode(&toplevel)
+		if decodeErr != nil {
+			return nil, decodeErr
+		}
+
+		configs = append(configs, toplevel)
+	}
+
+	return configs, nil
+}
+
+func loadImageTypeConfigsPlus(d *DistroYAML) ([]imageTypesYAML, error) {
+	files, err := fs.Glob(dataFS(), filepath.Join(d.DefsPath, "[^_]*.yaml"))
+	if err != nil {
+		return nil, err
+	}
+
+	commonPath := filepath.Join(d.DefsPath, "_common.yaml")
+	commonContent, _ := fs.ReadFile(dataFS(), commonPath)
+
+	configs := make([]imageTypesYAML, 0, len(files))
+	for _, fileName := range files {
+		f, err := dataFS().Open(fileName)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
+
+		var reader io.Reader = f
+		if len(commonContent) > 0 {
+			reader = io.MultiReader(bytes.NewReader(commonContent), f)
+		}
+
+		loader := yamlplus.NewLoader(dataFS())
+		if err = loader.RegisterRecursively("."); err != nil {
+			return nil, err
+		}
+
+		var toplevel imageTypesYAML
+
+		decoder := loader.NewDecoder(reader)
+		decoder.KnownFields(true)
+		decodeErr := decoder.Decode(&toplevel)
+		if decodeErr != nil {
+			return nil, decodeErr
+		}
+
+		configs = append(configs, toplevel)
+	}
+
+	return configs, nil
+}
+
+func mergeImageTypeConfigs(d *DistroYAML, configs []imageTypesYAML) error {
+	imageTypes := make(map[string]ImageTypeYAML)
+	for _, cfg := range configs {
+		for name, v := range cfg.ImageTypes {
+			if _, exists := imageTypes[name]; exists {
+				return fmt.Errorf("duplicate image type %s found", name)
+			}
 			v.name = name
 			if err := v.runTemplates(d); err != nil {
 				return err
@@ -291,10 +382,14 @@ func (d *DistroYAML) LoadImageTypes() error {
 				return err
 			}
 
-			d.imageTypes[name] = v
+			imageTypes[name] = v
 		}
 	}
-	d.imageConfig = toplevel.ImageConfig.For(d.ID)
+
+	if len(imageTypes) > 0 {
+		d.imageTypes = imageTypes
+	}
+
 	return nil
 }
 
@@ -302,9 +397,9 @@ func (d *DistroYAML) LoadImageTypes() error {
 // family. Note that multiple distros may use the same image types,
 // e.g. centos/rhel
 type imageTypesYAML struct {
-	ImageConfig distroImageConfig        `yaml:"image_config,omitempty"`
-	ImageTypes  map[string]ImageTypeYAML `yaml:"image_types"`
-	Common      map[string]any           `yaml:".common,omitempty"`
+	ImageTypes map[string]ImageTypeYAML `yaml:"image_types"`
+	Common     map[string]any           `yaml:".common,omitempty"`
+	Shared     map[string]any           `yaml:".shared,omitempty"`
 }
 
 type distroImageConfig struct {
@@ -410,8 +505,6 @@ type ImageTypeYAML struct {
 	// XXX: or iso_variant?
 	Variant string `yaml:"variant"`
 
-	RPMOSTree bool `yaml:"rpm_ostree"`
-
 	OSTree struct {
 		Name       string `yaml:"name"`
 		RemoteName string `yaml:"remote_name"`
@@ -445,6 +538,10 @@ type ImageTypeYAML struct {
 
 	// name is set by the loader
 	name string
+}
+
+func (it *ImageTypeYAML) IsOSTreeBasedImageType() bool {
+	return it.OSTree.Name != "" || it.OSTree.RemoteName != "" || it.OSTree.Ref != "" || it.OSTree.URL != ""
 }
 
 func (it *ImageTypeYAML) Name() string {
@@ -718,7 +815,7 @@ func (imgType *ImageTypeYAML) ImageConfig(id distro.ID, archName string) *distro
 // InstallerConfig returns the InstallerConfig for the given imgType
 // Note that on conditions the InstallerConfig is fully replaced, do
 // any merging in YAML
-func (imgType *ImageTypeYAML) InstallerConfig(id distro.ID, archName string) *distro.InstallerConfig {
+func (imgType *ImageTypeYAML) InstallerConfig(id distro.ID, archName string) (*distro.InstallerConfig, error) {
 	installerConfig := imgType.InstallerConfigYAML.InstallerConfig
 	for _, cond := range imgType.InstallerConfigYAML.Conditions {
 		if cond.When.Eval(id, archName) {
@@ -726,7 +823,13 @@ func (imgType *ImageTypeYAML) InstallerConfig(id distro.ID, archName string) *di
 		}
 	}
 
-	return installerConfig
+	if installerConfig != nil {
+		if err := installerConfig.ExpandTemplates(id, archName); err != nil {
+			return nil, err
+		}
+	}
+
+	return installerConfig, nil
 }
 
 // ISOConfig returns the ISOConfig for the given imgType
