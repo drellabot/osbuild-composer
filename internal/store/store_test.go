@@ -59,7 +59,7 @@ func (suite *storeTest) SetupSuite() {
 	suite.myImageType, err = suite.myArch.GetImageType(test_distro.TestImageTypeName)
 	suite.NoError(err)
 	manifest, _, _ := suite.myImageType.Manifest(&suite.myBP, suite.myImageOptions, suite.myRepoConfig, nil)
-	suite.myManifest, _ = manifest.Serialize(nil, nil, nil, nil)
+	suite.myManifest, _ = manifest.Serialize(nil, nil, nil, nil, nil)
 	suite.mySourceConfig = SourceConfig{
 		Name: "testSourceConfig",
 	}

@@ -170,6 +170,17 @@ func (impl *DepsolveJobImpl) Run(job worker.Job) error {
 		return err
 	}
 
+	err = job.Update(worker.JobResult{
+		Progress: &worker.JobProgress{
+			Message: "Resolving dependencies",
+			Done:    0,
+			Total:   1,
+		},
+	})
+	if err != nil {
+		logWithId.Warnf("Failed to update progress: %v", err)
+	}
+
 	if impl.RepositoryMTLSConfig != nil {
 		for pkgsetsi, pkgsets := range args.PackageSets {
 			for pkgseti, pkgset := range pkgsets {

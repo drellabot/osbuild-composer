@@ -51,8 +51,12 @@ func handleProgress(osbuildStatus *osbuild.StatusScanner, logger logrus.FieldLog
 				// more than 1 level of subprogress is not expected, just
 				// pipelines and stages.
 				if st.Progress.SubProgress != nil {
+					subMessage := st.Progress.SubProgress.Summary
+					if subMessage == "" {
+						subMessage = st.Progress.SubProgress.Message
+					}
 					partial.Progress.SubProgress = &worker.JobProgress{
-						Message: st.Progress.SubProgress.Message,
+						Message: subMessage,
 						Done:    st.Progress.SubProgress.Done,
 						Total:   st.Progress.SubProgress.Total,
 					}

@@ -574,6 +574,14 @@ func (impl *OSBuildJobImpl) Run(job worker.Job) error {
 	}
 
 	for _, jobTarget := range jobArgs.Targets {
+		if err := job.Update(worker.JobResult{
+			Progress: &worker.JobProgress{
+				Message: fmt.Sprintf("Uploading to %s", target.FriendlyName(jobTarget.Name)),
+			},
+		}); err != nil {
+			logWithId.Warnf("Failed to update upload progress: %v", err)
+		}
+
 		var targetResult *target.TargetResult
 		artifact := jobTarget.OsbuildArtifact
 		switch targetOptions := jobTarget.Options.(type) {

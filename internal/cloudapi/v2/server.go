@@ -761,7 +761,7 @@ func serializeManifest(ctx context.Context, manifestSource *manifest.Manifest, w
 		jobResult.JobError = clienterrors.New(clienterrors.ErrorManifestGeneration, reason, err.Error())
 		return
 	}
-	ms, err := manifestSource.Serialize(depsolveResult, containerSpecs, ostreeCommitSpecs, nil)
+	ms, err := manifestSource.Serialize(depsolveResult, containerSpecs, ostreeCommitSpecs, nil, nil)
 	if err != nil {
 		reason := "Error serializing manifest"
 		jobResult.JobError = clienterrors.New(clienterrors.ErrorManifestGeneration, reason, err.Error())

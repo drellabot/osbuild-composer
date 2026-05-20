@@ -1186,6 +1186,10 @@ components:
         total:
           type: integer
           description: Total amount of steps in the build.
+        summary:
+          type: string
+          description: Human-readable description of current activity.
+          example: "Installing RPM packages"
     UploadStatus:
       required:
         - status

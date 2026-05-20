@@ -2627,7 +2627,7 @@ func (api *API) composeHandler(writer http.ResponseWriter, request *http.Request
 		return
 	}
 
-	mf, err := manifest.Serialize(depsolved, containerSpecs, ostreeCommitSpecs, nil)
+	mf, err := manifest.Serialize(depsolved, containerSpecs, ostreeCommitSpecs, nil, nil)
 	if err != nil {
 		errors := responseError{
 			ID:  "ManifestCreationFailed",

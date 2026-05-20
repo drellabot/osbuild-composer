@@ -544,13 +544,15 @@ func progressFromJobResult(jobProgress *worker.JobProgress) *Progress {
 	var progress *Progress
 	if jobProgress != nil {
 		progress = &Progress{
-			Done:  jobProgress.Done,
-			Total: jobProgress.Total,
+			Done:    jobProgress.Done,
+			Total:   jobProgress.Total,
+			Summary: &jobProgress.Message,
 		}
 		if jobProgress.SubProgress != nil {
 			progress.SubProgress = &SubProgress{
-				Done:  jobProgress.SubProgress.Done,
-				Total: jobProgress.SubProgress.Total,
+				Done:    jobProgress.SubProgress.Done,
+				Total:   jobProgress.SubProgress.Total,
+				Summary: &jobProgress.SubProgress.Message,
 			}
 		}
 	}

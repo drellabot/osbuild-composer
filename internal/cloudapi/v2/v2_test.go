@@ -1298,11 +1298,13 @@ func TestComposeStatusSuccess(t *testing.T) {
 
 	partial, err := json.Marshal(&worker.JobResult{
 		Progress: &worker.JobProgress{
-			Done:  10,
-			Total: 20,
+			Message: "Building image",
+			Done:    10,
+			Total:   20,
 			SubProgress: &worker.JobProgress{
-				Done:  5,
-				Total: 6,
+				Message: "Installing RPM packages",
+				Done:    5,
+				Total:   6,
 			},
 		},
 	})
@@ -1314,7 +1316,7 @@ func TestComposeStatusSuccess(t *testing.T) {
 		"href": "/api/image-builder-composer/v2/composes/%v",
 		"kind": "ComposeStatus",
 		"id": "%v",
-		"image_status": {"status": "building","progress":{"done":10,"total":20,"subprogress":{"done":5,"total":6}}},
+		"image_status": {"status": "building","progress":{"done":10,"total":20,"summary":"Building image","subprogress":{"done":5,"total":6,"summary":"Installing RPM packages"}}},
 		"status": "pending"
 	}`, jobId, jobId))
 

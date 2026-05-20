@@ -158,7 +158,7 @@ func TestCreate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error creating osbuild manifest: %v", err)
 	}
-	mf, err := manifest.Serialize(nil, nil, nil, nil)
+	mf, err := manifest.Serialize(nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("error creating osbuild manifest: %v", err)
 	}
@@ -190,7 +190,7 @@ func TestCancel(t *testing.T) {
 		t.Fatalf("error creating osbuild manifest: %v", err)
 	}
 	server := newTestServer(t, t.TempDir(), defaultConfig, false)
-	mf, err := manifest.Serialize(nil, nil, nil, nil)
+	mf, err := manifest.Serialize(nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("error creating osbuild manifest: %v", err)
 	}
@@ -234,7 +234,7 @@ func TestUpdate(t *testing.T) {
 		t.Fatalf("error creating osbuild manifest: %v", err)
 	}
 	server := newTestServer(t, t.TempDir(), defaultConfig, false)
-	mf, err := manifest.Serialize(nil, nil, nil, nil)
+	mf, err := manifest.Serialize(nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("error creating osbuild manifest: %v", err)
 	}
@@ -284,7 +284,7 @@ func TestArgs(t *testing.T) {
 	manifest, _, err := imageType.Manifest(nil, distro.ImageOptions{Size: imageType.Size(0)}, nil, nil)
 	require.NoError(t, err)
 
-	mf, err := manifest.Serialize(nil, nil, nil, nil)
+	mf, err := manifest.Serialize(nil, nil, nil, nil, nil)
 	require.NoError(t, err)
 
 	job := worker.OSBuildJob{
@@ -336,7 +336,7 @@ func TestUpload(t *testing.T) {
 	}
 	storeDir := t.TempDir()
 	server := newTestServer(t, storeDir, defaultConfig, true)
-	mf, err := manifest.Serialize(nil, nil, nil, nil)
+	mf, err := manifest.Serialize(nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("error creating osbuild manifest: %v", err)
 	}
@@ -380,7 +380,7 @@ func TestUploadNotAcceptingArtifacts(t *testing.T) {
 	}
 	server := newTestServer(t, t.TempDir(), defaultConfig, false)
 	handler := server.Handler()
-	mf, _ := manifest.Serialize(nil, nil, nil, nil)
+	mf, _ := manifest.Serialize(nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("error creating osbuild manifest: %v", err)
 	}
@@ -412,7 +412,7 @@ func TestUploadAlteredBasePath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error creating osbuild manifest: %v", err)
 	}
-	mf, err := manifest.Serialize(nil, nil, nil, nil)
+	mf, err := manifest.Serialize(nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("error creating osbuild manifest: %v", err)
 	}
@@ -1384,7 +1384,7 @@ func TestRequestJobForWorker(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error creating osbuild manifest: %v", err)
 	}
-	mf, err := manifest.Serialize(nil, nil, nil, nil)
+	mf, err := manifest.Serialize(nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("error creating osbuild manifest: %v", err)
 	}
@@ -1419,7 +1419,7 @@ func TestJobHeartbeats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error creating osbuild manifest: %v", err)
 	}
-	mf, err := manifest.Serialize(nil, nil, nil, nil)
+	mf, err := manifest.Serialize(nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("error creating osbuild manifest: %v", err)
 	}
@@ -1505,7 +1505,7 @@ func TestCleanupArtifacts(t *testing.T) {
 	}
 	tempdir := t.TempDir()
 	server := newTestServer(t, tempdir, defaultConfig, true)
-	mf, err := manifest.Serialize(nil, nil, nil, nil)
+	mf, err := manifest.Serialize(nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("error creating osbuild manifest: %v", err)
 	}
