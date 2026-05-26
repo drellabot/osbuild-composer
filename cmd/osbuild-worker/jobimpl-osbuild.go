@@ -573,10 +573,13 @@ func (impl *OSBuildJobImpl) Run(job worker.Job) error {
 		return nil
 	}
 
-	for _, jobTarget := range jobArgs.Targets {
+	numTargets := len(jobArgs.Targets)
+	for i, jobTarget := range jobArgs.Targets {
 		if err := job.Update(worker.JobResult{
 			Progress: &worker.JobProgress{
 				Message: fmt.Sprintf("Uploading to %s", target.FriendlyName(jobTarget.Name)),
+				Done:    i,
+				Total:   numTargets,
 			},
 		}); err != nil {
 			logWithId.Warnf("Failed to update upload progress: %v", err)
