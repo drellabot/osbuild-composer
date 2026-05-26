@@ -11,6 +11,17 @@ import (
 	"github.com/osbuild/osbuild-composer/internal/worker"
 )
 
+func pipelinePercent(done, total int) int {
+	if total <= 0 {
+		return 0
+	}
+	pct := (done * 100) / total
+	if pct > 100 {
+		pct = 100
+	}
+	return pct
+}
+
 func handleProgress(osbuildStatus *osbuild.StatusScanner, logger logrus.FieldLogger, job worker.Job) error {
 	if osbuildStatus == nil {
 		return fmt.Errorf("status scanner is required to handle osbuild progress")
@@ -42,35 +53,38 @@ func handleProgress(osbuildStatus *osbuild.StatusScanner, logger logrus.FieldLog
 			}
 			lastUpdated = time.Now()
 
-			topMessage := st.Message
+			var partial worker.JobResult
 			if strings.HasPrefix(st.Pipeline, "source") {
-				topMessage = "Preparing sources"
-			}
-
-			partial := worker.JobResult{
-				Progress: &worker.JobProgress{
-					Message: topMessage,
-				},
-			}
-			if st.Progress != nil {
-				partial.Progress.Done = st.Progress.Done
-				partial.Progress.Total = st.Progress.Total
-				// more than 1 level of subprogress is not expected, just
-				// pipelines and stages.
-				if st.Progress.SubProgress != nil {
+				partial = worker.JobResult{
+					Progress: &worker.JobProgress{
+						Message: "Preparing sources",
+						Done:    0,
+						Total:   100,
+					},
+				}
+			} else {
+				pct := 0
+				if st.Progress != nil {
+					pct = pipelinePercent(st.Progress.Done, st.Progress.Total)
+				}
+				partial = worker.JobResult{
+					Progress: &worker.JobProgress{
+						Message: "Building image",
+						Done:    pct,
+						Total:   100,
+					},
+				}
+				if st.Progress != nil && st.Progress.SubProgress != nil {
 					subMessage := st.Progress.SubProgress.Summary
 					if subMessage == "" {
 						subMessage = st.Progress.SubProgress.Message
 					}
-					// Surface the human-readable sub-progress summary
-					// as the top-level message for the API consumer.
 					if subMessage != "" {
-						partial.Progress.Message = subMessage
-					}
-					partial.Progress.SubProgress = &worker.JobProgress{
-						Message: subMessage,
-						Done:    st.Progress.SubProgress.Done,
-						Total:   st.Progress.SubProgress.Total,
+						partial.Progress.SubProgress = &worker.JobProgress{
+							Message: subMessage,
+							Done:    st.Progress.SubProgress.Done,
+							Total:   st.Progress.SubProgress.Total,
+						}
 					}
 				}
 			}

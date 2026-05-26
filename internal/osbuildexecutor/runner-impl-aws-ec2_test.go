@@ -161,7 +161,7 @@ func TestHandleBuild(t *testing.T) {
 	require.Equal(t, worker.JobResult{
 		Progress: &worker.JobProgress{
 			Done:    0,
-			Total:   1,
+			Total:   100,
 			Message: "Preparing sources",
 		},
 	}, partial)
