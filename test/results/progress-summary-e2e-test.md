@@ -1,7 +1,6 @@
 # End-to-End Test: Progress Summary Feature
 
-**Date:** 2026-05-21
-**Compose ID:** a5af7729-27cc-4fdc-b014-149297745ab0
+**Date:** 2026-05-26 (updated, originally 2026-05-21)
 **Distribution:** fedora-43
 **Architecture:** x86_64
 **Image Type:** guest-image (qcow2)
@@ -26,6 +25,28 @@
 
 ## Progress Polling Results (every 30 seconds)
 
+### Run 2 (2026-05-26, with improved summary surfacing)
+
+**Compose ID:** b13af893-e3d7-4e78-8ed3-589105d2b735
+
+| Timestamp | Done | Total | Summary |
+|-----------|------|-------|---------|
+| 2026-05-26T09:39:37Z | N/A | N/A | status=pending |
+| 2026-05-26T09:40:07Z | N/A | N/A | status=pending |
+| 2026-05-26T09:40:38Z | 0 | 5 | Preparing sources |
+| 2026-05-26T09:41:08Z | 0 | 5 | Preparing sources |
+| 2026-05-26T09:41:38Z | 1 | 5 | Verify, and install RPM packages |
+| 2026-05-26T09:42:08Z | 1 | 5 | Verify, and install RPM packages |
+| 2026-05-26T09:42:38Z | 1 | 5 | Verify, and install RPM packages |
+| 2026-05-26T09:43:09Z | 1 | 5 | Verify, and install RPM packages |
+| 2026-05-26T09:43:39Z | 2 | 5 | Verify, and install RPM packages |
+| 2026-05-26T09:44:09Z | 0 | 0 | Uploading to Worker Server |
+| 2026-05-26T09:44:39Z | N/A | N/A | status=success |
+
+### Run 1 (2026-05-21, original PR code)
+
+**Compose ID:** a5af7729-27cc-4fdc-b014-149297745ab0
+
 | Timestamp | Done | Total | Summary |
 |-----------|------|-------|---------|
 | 2026-05-21T21:30:35Z | 0 | 5 | Starting pipeline source org.osbuild.curl |
@@ -36,46 +57,31 @@
 | 2026-05-21T21:33:06Z | 0 | 0 | Uploading to Worker Server |
 | 2026-05-21T21:33:36Z | N/A | N/A | status=success |
 
-## Observations
+## Code Changes
 
-### The `summary` field works end-to-end
+Two changes were made to `internal/osbuildexecutor/runner-common.go`:
 
-The new `summary` field is populated at each compose phase:
+1. **Source pipeline mapped to "Preparing sources"**: When the osbuild pipeline name
+   starts with "source", the top-level summary is set to "Preparing sources" instead
+   of surfacing the raw osbuild monitor message (e.g., "Starting pipeline source org.osbuild.curl").
 
-1. **Depsolve phase**: Sets `summary` to `"Resolving dependencies"` (completed too quickly to capture with 30s polling in this run)
-2. **osbuild build phase**: The sub-progress `summary` correctly shows human-readable stage descriptions from stage metadata:
-   - `"Verify, and install RPM packages"` instead of the technical name `org.osbuild.rpm`
-3. **Upload phase**: Shows `"Uploading to Worker Server"` using the `target.FriendlyName()` helper
-
-### Data flow
-
-The feature chains correctly across all three repos:
-
-```
-osbuild (Python)          images (Go)                  osbuild-composer (Go)
-stage .meta.json desc  -> JSON-seq "summary" field  -> Progress.SubProgress.Summary  -> worker JobProgress.Message  -> CloudAPI Summary
-```
-
-### Observation: top-level summary still contains technical names
-
-The top-level `summary` field (`Progress.Summary` in the API) is populated from the osbuild monitor's status message (`st.Message` in `runner-common.go`), which includes technical pipeline/module names:
-
-- `"Starting pipeline source org.osbuild.curl"`
-- `"Finished module org.osbuild.rpm"`
-
-The human-readable description from stage metadata appears only in the **sub-progress** `summary` field (e.g., `"Verify, and install RPM packages"`). This is architecturally consistent: the top-level reports pipeline progress, while sub-progress reports stage-level detail.
+2. **Sub-progress summary surfaced as top-level message**: When a human-readable
+   sub-progress summary is available (from stage metadata), it replaces the pipeline-level
+   message as the top-level summary. This means the API consumer always sees the
+   human-readable description (e.g., "Verify, and install RPM packages") rather than
+   the technical pipeline name.
 
 ## Final Compose Status
 
 ```json
 {
-    "href": "/api/image-builder-composer/v2/composes/a5af7729-27cc-4fdc-b014-149297745ab0",
-    "id": "a5af7729-27cc-4fdc-b014-149297745ab0",
+    "href": "/api/image-builder-composer/v2/composes/b13af893-e3d7-4e78-8ed3-589105d2b735",
+    "id": "b13af893-e3d7-4e78-8ed3-589105d2b735",
     "image_status": {
         "status": "success",
         "upload_status": {
             "options": {
-                "artifact_path": "/var/lib/osbuild-composer/artifacts/a5af7729-27cc-4fdc-b014-149297745ab0/disk.qcow2"
+                "artifact_path": "/var/lib/osbuild-composer/artifacts/b13af893-e3d7-4e78-8ed3-589105d2b735/disk.qcow2"
             },
             "status": "success",
             "type": "local"
@@ -83,7 +89,7 @@ The human-readable description from stage metadata appears only in the **sub-pro
         "upload_statuses": [
             {
                 "options": {
-                    "artifact_path": "/var/lib/osbuild-composer/artifacts/a5af7729-27cc-4fdc-b014-149297745ab0/disk.qcow2"
+                    "artifact_path": "/var/lib/osbuild-composer/artifacts/b13af893-e3d7-4e78-8ed3-589105d2b735/disk.qcow2"
                 },
                 "status": "success",
                 "type": "local"
@@ -97,4 +103,6 @@ The human-readable description from stage metadata appears only in the **sub-pro
 
 ## Result: PASS
 
-The progress summary feature works correctly end-to-end. The `summary` field appears in the Cloud API v2 responses during all build phases and provides human-readable descriptions of compose activity.
+The progress summary feature works correctly end-to-end. All compose phases now show
+human-readable summaries: "Preparing sources", "Verify, and install RPM packages",
+"Uploading to Worker Server".

@@ -162,7 +162,7 @@ func TestHandleBuild(t *testing.T) {
 		Progress: &worker.JobProgress{
 			Done:    0,
 			Total:   1,
-			Message: "starting pipeline",
+			Message: "Preparing sources",
 		},
 	}, partial)
 	require.Len(t, job.PartialUpdates, 1)

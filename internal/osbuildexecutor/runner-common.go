@@ -2,6 +2,7 @@ package osbuildexecutor
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -40,9 +41,15 @@ func handleProgress(osbuildStatus *osbuild.StatusScanner, logger logrus.FieldLog
 				continue
 			}
 			lastUpdated = time.Now()
+
+			topMessage := st.Message
+			if strings.HasPrefix(st.Pipeline, "source") {
+				topMessage = "Preparing sources"
+			}
+
 			partial := worker.JobResult{
 				Progress: &worker.JobProgress{
-					Message: st.Message,
+					Message: topMessage,
 				},
 			}
 			if st.Progress != nil {
@@ -54,6 +61,11 @@ func handleProgress(osbuildStatus *osbuild.StatusScanner, logger logrus.FieldLog
 					subMessage := st.Progress.SubProgress.Summary
 					if subMessage == "" {
 						subMessage = st.Progress.SubProgress.Message
+					}
+					// Surface the human-readable sub-progress summary
+					// as the top-level message for the API consumer.
+					if subMessage != "" {
+						partial.Progress.Message = subMessage
 					}
 					partial.Progress.SubProgress = &worker.JobProgress{
 						Message: subMessage,
