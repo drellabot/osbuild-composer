@@ -2575,6 +2575,10 @@ image_types:
             - "google-compute-engine"
             - "google-osconfig-agent"
             - "gce-disk-expand"
+            # google-cloud-cli-spanner-emulator from the cloud-sdk
+            # repo provides libstdc++.so.6, which can cause the
+            # solver to skip installing the real libstdc++ package
+            - "libstdc++"
             # Not explicitly included in GCP kickstart, but present on the image
             # for time synchronization
             - "chrony"
