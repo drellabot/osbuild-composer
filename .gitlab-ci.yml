@@ -9,7 +9,7 @@ stages:
   before_script:
     - mkdir -p /tmp/artifacts
     - schutzbot/ci_details.sh > /tmp/artifacts/ci-details-before-run.txt
-    - schutzbot/fetch_team_ssh_keys.sh | tee -a ~/.ssh/authorized_keys > /dev/null
+    - python3 schutzbot/fetch_team_ssh_keys.py | tee -a ~/.ssh/authorized_keys > /dev/null
     # workaround bug https://issues.redhat.com/browse/RHEL-17890
     - sudo dnf upgrade -y nettle
   after_script:
