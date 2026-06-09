@@ -1,0 +1,10 @@
+# GitHub usernames for team members who should have SSH access to CI runners.
+# One username per line. Lines starting with # are comments.
+# Keys are fetched dynamically via the GitHub API.
+ondrejbudai
+bcl
+achilleas-k
+croissanne
+thozza
+supakeen
+lzap
