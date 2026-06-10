@@ -797,6 +797,39 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /containers/validate:
+    get:
+      operationId: getValidateContainer
+      summary: Check if a public container reference is reachable
+      security:
+        - Bearer: []
+      parameters:
+        - name: source
+          in: query
+          description: Container image reference to validate (e.g. quay.io/org/image:tag)
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Container validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContainerValidationResponse'
+        '400':
+          description: Missing or invalid source parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Auth token is invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
 components:
   schemas:
     ObjectReference:
@@ -3062,6 +3095,21 @@ components:
           default: false
           description: |
             Set the releasever DNF variable, tying the system to a specific release of RHEL
+    ContainerValidationResponse:
+      type: object
+      required:
+        - source
+        - reachable
+      properties:
+        source:
+          type: string
+          description: The container reference that was validated
+        reachable:
+          type: boolean
+          description: Whether the container image is publicly reachable
+        error:
+          type: string
+          description: Error message if the container is not reachable
     minsize:
       type: string
       example: "2 GiB"
